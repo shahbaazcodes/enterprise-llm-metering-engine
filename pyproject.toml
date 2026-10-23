@@ -1,0 +1,85 @@
+[project]
+name = "llm-metering-engine"
+version = "1.0.0"
+description = "Production-grade LLM usage metering & billing engine with micro-cent precision accounting, distributed idempotency, ML anomaly detection and Stripe billing sync."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Principal AI Infrastructure Engineering" }]
+keywords = ["llm", "metering", "billing", "fastapi", "observability"]
+
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.6",
+    "pydantic-settings>=2.2",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "asyncpg>=0.29",
+    "greenlet>=3.0",
+    "redis>=5.0",
+    "stripe>=8.0",
+    "boto3>=1.34",
+    "scikit-learn>=1.4",
+    "numpy>=1.26",
+    "prometheus-client>=0.20",
+    "langchain-core>=0.3",
+    "httpx>=0.27",
+    "orjson>=3.9",
+    "tenacity>=8.2",
+    "python-multipart>=0.0.9",
+    "streamlit>=1.35",
+    "plotly>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "fakeredis>=2.23",
+    "lupa>=2.0",
+    "aiosqlite>=0.20",
+    "ruff>=0.5",
+]
+
+[project.scripts]
+llm-metering = "app.main:run"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["app", "app.routers"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["db/migrations", ".venv", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["B008", "E501", "BLE001"]
+
+[tool.ruff.lint.per-file-ignores]
+"eval/*" = ["E402"]
+"app/db.py" = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "eval"]
+combine-as-imports = true
+force-sort-within-sections = true
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+docstring-code-format = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["eval"]
+pythonpath = ["."]
+filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+    "live_redis: tests requiring live Redis container infrastructure",
+]

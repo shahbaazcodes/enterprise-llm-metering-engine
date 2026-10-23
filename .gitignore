@@ -1,0 +1,47 @@
+# ---- Secrets / local configuration -----------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+ENV/
+
+# ---- Tooling caches ---------------------------------------------------------
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.coverage
+coverage.xml
+htmlcov/
+
+# ---- Local runtime artefacts ------------------------------------------------
+*.log
+*.sqlite3
+*.db
+localstack_data/
+postgres_data/
+redis_data/
+var/
+tmp/
+audit_exports/
+
+# ---- Editors / OS -----------------------------------------------------------
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
