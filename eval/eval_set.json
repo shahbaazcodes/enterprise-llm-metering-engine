@@ -1,0 +1,265 @@
+{
+  "version": "1.1.0",
+  "description": "Scenario matrix for the LLM metering & billing evaluation suite. Every probe is deterministic and offline.",
+  "tenants": [
+    {
+      "slug": "eval-free",
+      "plan": "free",
+      "monthly_limit_microcents": 5000000,
+      "rate_limit_rpm": 60,
+      "cached_input_discount_bps": 2500,
+      "description": "Free tier - $5.00 monthly cap, 60 rpm."
+    },
+    {
+      "slug": "eval-pro",
+      "plan": "pro",
+      "monthly_limit_microcents": 500000000,
+      "rate_limit_rpm": 600,
+      "cached_input_discount_bps": 2500,
+      "description": "Pro tier - $500.00 monthly cap, 600 rpm."
+    },
+    {
+      "slug": "eval-quota-edge",
+      "plan": "free",
+      "monthly_limit_microcents": 10000,
+      "rate_limit_rpm": 60,
+      "cached_input_discount_bps": 2500,
+      "description": "Synthetic tenant with a $0.10 cap so the quota boundary is reachable in a single request."
+    }
+  ],
+  "pricing_models": [
+    {
+      "model": "gpt-4o",
+      "provider": "openai",
+      "input_microcents_per_million": 2500000,
+      "output_microcents_per_million": 10000000,
+      "cached_input_microcents_per_million": 625000,
+      "usd_per_million_input": 2.5,
+      "usd_per_million_output": 10.0
+    },
+    {
+      "model": "gpt-4o-mini",
+      "provider": "openai",
+      "input_microcents_per_million": 150000,
+      "output_microcents_per_million": 600000,
+      "cached_input_microcents_per_million": 37500,
+      "usd_per_million_input": 0.15,
+      "usd_per_million_output": 0.6
+    },
+    {
+      "model": "claude-sonnet-4",
+      "provider": "anthropic",
+      "input_microcents_per_million": 3000000,
+      "output_microcents_per_million": 15000000,
+      "cached_input_microcents_per_million": 750000,
+      "usd_per_million_input": 3.0,
+      "usd_per_million_output": 15.0
+    }
+  ],
+  "token_counts": [
+    {
+      "name": "fresh_input_only",
+      "input_tokens": 1000,
+      "cached_input_tokens": 0,
+      "output_tokens": 0,
+      "reasoning_tokens": 0,
+      "reasoning_included_in_output": true,
+      "description": "1K fresh prompt tokens, no generation."
+    },
+    {
+      "name": "cached_input_only",
+      "input_tokens": 0,
+      "cached_input_tokens": 1000,
+      "output_tokens": 0,
+      "reasoning_tokens": 0,
+      "reasoning_included_in_output": true,
+      "description": "1K cached prompt tokens - exercises the 25% discount path."
+    },
+    {
+      "name": "reasoning_output",
+      "input_tokens": 0,
+      "cached_input_tokens": 0,
+      "output_tokens": 1000,
+      "reasoning_tokens": 0,
+      "reasoning_included_in_output": true,
+      "description": "1K output tokens with no reasoning component."
+    },
+    {
+      "name": "reasoning_subset",
+      "input_tokens": 0,
+      "cached_input_tokens": 0,
+      "output_tokens": 1000,
+      "reasoning_tokens": 400,
+      "reasoning_included_in_output": true,
+      "description": "Reasoning is a SUBSET of output (OpenAI semantics) - must not be billed twice."
+    },
+    {
+      "name": "reasoning_additive",
+      "input_tokens": 0,
+      "cached_input_tokens": 0,
+      "output_tokens": 1000,
+      "reasoning_tokens": 400,
+      "reasoning_included_in_output": false,
+      "description": "Reasoning is billed ON TOP of output (Anthropic-style split counters)."
+    },
+    {
+      "name": "mixed_workload",
+      "input_tokens": 8000,
+      "cached_input_tokens": 2000,
+      "output_tokens": 1500,
+      "reasoning_tokens": 500,
+      "reasoning_included_in_output": true,
+      "description": "Realistic blended request across all four counters."
+    }
+  ],
+  "probes": [
+    {
+      "id": "P1-idempotency",
+      "name": "Idempotency: replay cache, atomic lock, compare-and-delete",
+      "category": "idempotency",
+      "critical": true,
+      "tests": [
+        {
+          "module": "eval.test_metering",
+          "test": "test_idempotency_key_replay_returns_cached_result"
+        },
+        {
+          "module": "eval.test_metering",
+          "test": "test_atomic_idempotency_lock_contestation"
+        },
+        {
+          "module": "eval.test_metering",
+          "test": "test_idempotency_conflict_is_raised_when_lock_is_held"
+        },
+        {
+          "module": "eval.test_metering",
+          "test": "test_idempotency_lock_is_exclusive_and_compare_and_delete"
+        }
+      ]
+    },
+    {
+      "id": "P2-quota",
+      "name": "Quotas: rate limit, spend cap, reservation/settlement race",
+      "category": "quota",
+      "critical": true,
+      "tests": [
+        {
+          "module": "eval.test_metering",
+          "test": "test_sliding_window_rate_limit_rejects_over_limit"
+        },
+        {
+          "module": "eval.test_metering",
+          "test": "test_monthly_quota_boundary_exact_microcent"
+        },
+        {
+          "module": "eval.test_metering",
+          "test": "test_quota_reservation_settlement_race"
+        },
+        {
+          "module": "eval.test_metering",
+          "test": "test_quota_settlement_storm_never_double_counts"
+        }
+      ]
+    },
+    {
+      "id": "P3-subscription",
+      "name": "Subscriptions: entitlement enforcement and ledger rollup",
+      "category": "subscription",
+      "critical": true,
+      "tests": [
+        {
+          "module": "eval.test_metering",
+          "test": "test_inactive_subscription_is_refused_with_402"
+        },
+        {
+          "module": "eval.test_metering",
+          "test": "test_usage_rollup_agrees_with_the_ledger"
+        }
+      ]
+    },
+    {
+      "id": "P4-webhook",
+      "name": "Webhooks: signature verification, plan sync, deduplication",
+      "category": "webhook",
+      "critical": true,
+      "tests": [
+        {
+          "module": "eval.test_stripe",
+          "test": "test_webhook_signature_verification"
+        },
+        {
+          "module": "eval.test_stripe",
+          "test": "test_webhook_signature_timestamp_tolerance"
+        },
+        {
+          "module": "eval.test_stripe",
+          "test": "test_webhook_checkout_session_upgrades_tenant_to_pro"
+        },
+        {
+          "module": "eval.test_stripe",
+          "test": "test_webhook_subscription_deleted_downgrades_tenant_to_free"
+        },
+        {
+          "module": "eval.test_stripe",
+          "test": "test_webhook_subscription_update_syncs_plan_and_status"
+        },
+        {
+          "module": "eval.test_stripe",
+          "test": "test_webhook_duplicate_event_is_applied_exactly_once"
+        },
+        {
+          "module": "eval.test_stripe",
+          "test": "test_webhook_invoice_payment_failed_marks_subscription_past_due"
+        },
+        {
+          "module": "eval.test_stripe",
+          "test": "test_webhook_unhandled_event_is_acknowledged_and_ignored"
+        }
+      ]
+    },
+    {
+      "id": "P5-concurrency-pricing",
+      "name": "Concurrency & token pricing: atomic window, exact micro-cent math",
+      "category": "concurrency-pricing",
+      "critical": true,
+      "tests": [
+        {
+          "module": "eval.test_metering",
+          "test": "test_sliding_window_rate_limiter_concurrency"
+        },
+        {
+          "module": "eval.test_metering",
+          "test": "test_sliding_window_lua_script_is_sub_millisecond"
+        },
+        {
+          "module": "eval.test_calculator",
+          "test": "test_fresh_input_pricing_exact_microcents"
+        },
+        {
+          "module": "eval.test_calculator",
+          "test": "test_cached_input_uses_discounted_rate"
+        },
+        {
+          "module": "eval.test_calculator",
+          "test": "test_reasoning_subset_is_not_billed_twice"
+        },
+        {
+          "module": "eval.test_calculator",
+          "test": "test_reasoning_additive_is_billed_on_top"
+        },
+        {
+          "module": "eval.test_calculator",
+          "test": "test_pricing_matrix_matches_independent_reference"
+        },
+        {
+          "module": "eval.test_calculator",
+          "test": "test_round_half_up_rounds_away_from_zero"
+        },
+        {
+          "module": "eval.test_calculator",
+          "test": "test_microcents_and_usd_round_trip_is_lossless"
+        }
+      ]
+    }
+  ]
+}
