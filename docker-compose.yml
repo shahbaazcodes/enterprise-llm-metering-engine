@@ -1,0 +1,123 @@
+# ---------------------------------------------------------------------------
+# LLM Usage Metering & Billing Engine - local infrastructure
+#
+#   docker compose up -d
+#   docker compose --profile tools run --rm createbuckets
+#
+# Host ports are parameterised (POSTGRES_PORT / REDIS_PORT / LOCALSTACK_PORT)
+# so this stack can coexist with other Postgres/Redis/LocalStack instances
+# already running on the host.
+# ---------------------------------------------------------------------------
+
+name: llm-metering
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: llm_metering_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-metering}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-metering}
+      POSTGRES_DB: ${POSTGRES_DB:-metering}
+      # Deterministic collation keeps index behaviour identical across hosts.
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+      TZ: UTC
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - log_min_duration_statement=200
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-metering} -d ${POSTGRES_DB:-metering}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks: [metering-net]
+
+  redis:
+    image: redis:7-alpine
+    container_name: llm_metering_redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --maxmemory-policy
+      - noeviction
+      - --save
+      - "60 1000"
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-h", "localhost", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [metering-net]
+
+  localstack:
+    image: localstack/localstack:3
+    container_name: llm_metering_localstack
+    restart: unless-stopped
+    environment:
+      SERVICES: s3
+      DEFAULT_REGION: ${AWS_REGION:-us-east-1}
+      EAGER_SERVICE_LOADING: "1"
+      DEBUG: "0"
+      PERSISTENCE: "1"
+      DOCKER_HOST: unix:///var/run/docker.sock
+    ports:
+      - "${LOCALSTACK_PORT:-4566}:4566"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - localstack_data:/var/lib/localstack
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:4566/_localstack/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    networks: [metering-net]
+
+  # One-shot helper: provisions the audit bucket inside LocalStack.
+  createbuckets:
+    image: amazon/aws-cli:2.15.0
+    container_name: llm_metering_createbuckets
+    profiles: [tools]
+    depends_on:
+      localstack:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
+      AWS_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
+    entrypoint: >
+      /bin/sh -c "
+      aws --endpoint-url=http://localstack:4566 s3api head-bucket --bucket ${S3_BUCKET:-llm-metering-audit} 2>/dev/null ||
+      aws --endpoint-url=http://localstack:4566 s3api create-bucket --bucket ${S3_BUCKET:-llm-metering-audit};
+      aws --endpoint-url=http://localstack:4566 s3 ls;
+      "
+    networks: [metering-net]
+
+volumes:
+  postgres_data:
+  redis_data:
+  localstack_data:
+
+networks:
+  metering-net:
+    driver: bridge
