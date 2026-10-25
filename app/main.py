@@ -30,7 +30,7 @@ from app import metrics
 from app.exceptions import MeteringError
 from app.ml_guard import AnomalyGuard
 from app.providers import SimulatedProvider
-from app.routers import generate, health, usage, webhooks
+from app.routers import enrich, generate, health, usage, webhooks
 from app.settings import Settings, get_settings
 
 logger = logging.getLogger("llm.metering.main")

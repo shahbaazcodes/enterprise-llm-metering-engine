@@ -174,6 +174,17 @@ class Settings(BaseSettings):
     metrics_enabled: bool = True
     metrics_path: str = "/metrics"
 
+    # -- LLM enrichment -------------------------------------------------------
+    llm_enabled: bool = True
+    """Kill-switch. When False, ``POST /v1/enrich`` returns 503 immediately."""
+    llm_stub: bool = False
+    """When True, returns STUB_ENRICH_RESPONSE without invoking upstream models."""
+    llm_api_key: str | None = None
+    llm_base_url: str = "https://api.openai.com/v1"
+    llm_model: str = "gpt-4o-mini"
+    llm_timeout_seconds: float = 30.0
+    llm_max_retries: int = 2
+
     # -- price book ---------------------------------------------------------
     model_pricing: dict[str, PriceBookEntry] = Field(default_factory=_default_price_book)
 
