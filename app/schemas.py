@@ -7,9 +7,51 @@ human consumption - it is never used for accounting.
 
 from __future__ import annotations
 
+from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class ContentCategory(str, Enum):
+    """Domain classification for enrichment output."""
+
+    TECH = "tech"
+    FINANCE = "finance"
+    HEALTHCARE = "healthcare"
+    SECURITY = "security"
+    OTHER = "other"
+
+
+class EnrichRequest(BaseModel):
+    """Body of ``POST /v1/enrich``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    raw_text: str = Field(min_length=20, max_length=4000)
+    source_url: str | None = Field(default=None, max_length=2048)
+
+
+class EnrichResponse(BaseModel):
+    """Successful response of ``POST /v1/enrich``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    category: ContentCategory
+    summary: str = Field(max_length=300)
+    quality_score: float = Field(ge=0.0, le=1.0)
+    needs_human_review: bool
+    reasoning: str = Field(max_length=200)
+
+
+#: Deterministic stub used when ``LLM_STUB=1`` for quota-free local development.
+STUB_ENRICH_RESPONSE = EnrichResponse(
+    category=ContentCategory.TECH,
+    summary="Stub enrichment response for local development and tests.",
+    quality_score=0.85,
+    needs_human_review=False,
+    reasoning="Stub response - no upstream LLM call was made.",
+)
 
 
 class UsageOverride(BaseModel):
