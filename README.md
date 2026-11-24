@@ -3,7 +3,7 @@
 A production-grade **metering and billing plane** for LLM traffic. It sits in
 front of any model provider, computes the exact cost of every request, enforces
 the tenant's commercial contract (entitlement, spend cap, request rate) and
-writes an immutable, auditable ledger.
+writes an immutable, auditable ledger..
 
 | Guarantee | How it is delivered |
 | --- | --- |
